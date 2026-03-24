@@ -1,0 +1,25 @@
+# Environment
+docker/.env
+backend/.env
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+.venv/
+venv/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Data
+chroma_data/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
