@@ -2,6 +2,7 @@
 docker/.env
 backend/.env
 .env
+secrets.env
 
 # Python
 __pycache__/
@@ -23,3 +24,4 @@ chroma_data/
 # OS
 .DS_Store
 Thumbs.db
+/.v1/
