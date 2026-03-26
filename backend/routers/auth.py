@@ -109,14 +109,15 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 
 @router.get("/approvals")
-async def list_pending_approvals(
+async def list_approvals(
+    status: str = None,
     db: AsyncSession = Depends(get_db),
     _: str = Depends(get_current_owner),
 ):
-    result = await db.execute(
-        select(ApprovalRequest).where(ApprovalRequest.status == "pending")
-        .order_by(ApprovalRequest.created_at.desc())
-    )
+    q = select(ApprovalRequest).order_by(ApprovalRequest.created_at.desc())
+    if status:
+        q = q.where(ApprovalRequest.status == status)
+    result = await db.execute(q)
     return result.scalars().all()
 
 

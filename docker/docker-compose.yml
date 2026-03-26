@@ -123,6 +123,31 @@ services:
       - kronos_net
     restart: unless-stopped
 
+  # Optional: Unsloth fine-tuning container
+  # Uncomment to pre-pull the image so fine-tune jobs start instantly.
+  # Requires NVIDIA GPU for practical speed; CPU fallback is very slow.
+  # 
+  # To enable: uncomment the block and run:
+  #   docker compose pull unsloth
+  #   docker compose up -d
+  #
+  # unsloth:
+  #   image: unsloth/unsloth-repo:latest
+  #   container_name: kronos_unsloth
+  #   command: sleep infinity          # keep alive for exec-based jobs
+  #   volumes:
+  #     - /app/finetune_outputs:/output
+  #   networks:
+  #     - kronos_net
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
+
 volumes:
   postgres_data:
     name: kronos_postgres_data

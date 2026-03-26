@@ -11,6 +11,10 @@ import DockerPage from './pages/Docker'
 import AgentsPage from './pages/Agents'
 import MCPPage   from './pages/MCP'
 import WikiPage  from './pages/Wiki'
+import PentestPage  from './pages/Pentest'
+import FineTunePage   from './pages/FineTune'
+import SettingsPage   from './pages/SettingsPage'
+import URLWatcherPage from './pages/URLWatcher'
 import HowToPage from './pages/HowTo'
 import ChatPage  from './pages/Chat'
 import ApprovalsPage from './pages/Approvals'
@@ -50,6 +54,10 @@ export default function App() {
         <Route path="/chat"    element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/approvals" element={<ProtectedRoute><ApprovalsPage /></ProtectedRoute>} />
         <Route path="/wiki"      element={<ProtectedRoute><WikiPage /></ProtectedRoute>} />
+        <Route path="/pentest"   element={<ProtectedRoute><PentestPage /></ProtectedRoute>} />
+        <Route path="/finetune"  element={<ProtectedRoute><FineTunePage /></ProtectedRoute>} />
+        <Route path="/settings"  element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+        <Route path="/watchers"  element={<ProtectedRoute><URLWatcherPage /></ProtectedRoute>} />
         <Route path="/howto"     element={<ProtectedRoute><HowToPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

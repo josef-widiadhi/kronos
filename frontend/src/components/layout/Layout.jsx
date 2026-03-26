@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   Terminal, Database, Box, Cpu, Activity,
-  MessageSquare, ShieldCheck, LogOut, ChevronRight, Network, BookOpen, HelpCircle,
+  MessageSquare, ShieldCheck, LogOut, ChevronRight, Network, BookOpen, HelpCircle, Shield, FlaskConical, Settings, Globe,
 } from 'lucide-react'
 import { useStore } from '../../hooks/useStore'
 import { StatusDot, Badge } from '../ui'
-import { getApprovals, ollamaStatus } from '../../api'
+import { getApprovals, ollamaStatus, ollamaModels, getCollections } from '../../api'
 
 const NAV = [
   { to: '/',         icon: Activity,      label: 'Monitor',  exact: true },
@@ -15,8 +15,15 @@ const NAV = [
   { to: '/docker',   icon: Box,           label: 'Docker'  },
   { to: '/agents',    icon: Cpu,           label: 'Agents'   },
   { to: '/mcp',       icon: Network,       label: 'MCP'      },
+  { to: '/pentest',   icon: Shield,        label: 'Pentest KB'  },
+  { to: '/finetune',  icon: FlaskConical,  label: 'Fine-Tune'   },
   { to: '/chat',      icon: MessageSquare, label: 'Chat Test' },
   { to: '/approvals',icon: ShieldCheck,   label: 'Approvals' },
+  { separator: true },
+  { to: '/watchers',  icon: Globe,         label: 'URL Watchers' },
+  { to: '/wiki',      icon: BookOpen,      label: 'Wiki'      },
+  { to: '/howto',     icon: HelpCircle,    label: 'How-To'    },
+  { to: '/settings',  icon: Settings,      label: 'Settings'  },
 ]
 
 export function Sidebar() {
@@ -74,7 +81,12 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '10px 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {NAV.map(({ to, icon: Icon, label, exact }) => (
+        {NAV.map((item, idx) => {
+            if (item.separator) {
+              return <div key={`sep-${idx}`} style={{ height: 1, background: 'var(--border)', margin: '4px 10px' }} />
+            }
+            const { to, icon: Icon, label, exact } = item
+            return (
           <NavLink
             key={to}
             to={to}
@@ -105,7 +117,8 @@ export function Sidebar() {
               </>
             )}
           </NavLink>
-        ))}
+        )
+        })}
       </nav>
 
       {/* Footer */}
@@ -131,7 +144,7 @@ export function Sidebar() {
 }
 
 export function AppLayout({ children }) {
-  const { setOllamaStatus, setApprovals } = useStore()
+  const { setOllamaStatus, setApprovals, setModels, setCollections } = useStore()
 
   useEffect(() => {
     // Poll ollama status every 10s
@@ -139,6 +152,18 @@ export function AppLayout({ children }) {
       try {
         const r = await ollamaStatus()
         setOllamaStatus(r.data)
+      } catch {}
+    }
+    const pollModels = async () => {
+      try {
+        const r = await ollamaModels()
+        setModels(r.data.models || [])
+      } catch {}
+    }
+    const pollCollections = async () => {
+      try {
+        const r = await getCollections()
+        setCollections(r.data || [])
       } catch {}
     }
     const pollApprovals = async () => {
@@ -149,9 +174,13 @@ export function AppLayout({ children }) {
     }
     pollOllama()
     pollApprovals()
+    pollModels()
+    pollCollections()
     const t1 = setInterval(pollOllama, 10000)
     const t2 = setInterval(pollApprovals, 5000)
-    return () => { clearInterval(t1); clearInterval(t2) }
+    const t3 = setInterval(pollModels, 30000)
+    const t4 = setInterval(pollCollections, 20000)
+    return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3); clearInterval(t4) }
   }, [])
 
   return (

@@ -42,12 +42,16 @@ class AgentCreate(BaseModel):
     kb_collection_id: Optional[str] = None
     system_prompt: Optional[str] = None
     config: Optional[dict] = None
+    mem_limit_mb: Optional[int] = None   # None = use system default from Settings
+    cpu_shares: Optional[int] = None     # None = use system default from Settings
 
 
 class AgentUpdate(BaseModel):
     description: Optional[str] = None
     system_prompt: Optional[str] = None
     config: Optional[dict] = None
+    mem_limit_mb: Optional[int] = None
+    cpu_shares: Optional[int] = None
 
 
 class DeployRequest(BaseModel):
@@ -106,6 +110,8 @@ async def create_agent(
         kb_collection_id=req.kb_collection_id,
         system_prompt=req.system_prompt or DEFAULT_PROMPTS.get(req.agent_type, ""),
         config=req.config or {},
+        mem_limit_mb=req.mem_limit_mb,  # None = resolved at deploy from Settings
+        cpu_shares=req.cpu_shares,
         status="staged",
     )
     db.add(agent)
@@ -228,6 +234,22 @@ async def execute_deploy(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
+    # Enforce max_agents cap from Settings
+    from routers.settings_router import get_setting as _get_setting
+    max_agents = await _get_setting("agents.max_agents", db) or 5
+    running_count_result = await db.execute(
+        select(Agent).where(Agent.status == "running")
+    )
+    running_agents = running_count_result.scalars().all()
+    if len(running_agents) >= int(max_agents):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Max deployed agents reached ({max_agents}). "
+                f"Stop an existing agent first, or increase Settings → Compute → Max Deployed Agents."
+            ),
+        )
+
     # Build Dockerfile content for this worker
     kb_info = payload.get("kb_info")
     dockerfile = _build_worker_dockerfile(
@@ -247,6 +269,15 @@ async def execute_deploy(
         with open(os.path.join(build_dir, "Dockerfile"), "w") as f:
             f.write(dockerfile)
 
+        # Copy worker.py into build context
+        worker_src = os.path.join(os.path.dirname(__file__), "..", "workers", "worker.py")
+        if os.path.exists(worker_src):
+            shutil.copy(worker_src, os.path.join(build_dir, "worker.py"))
+        else:
+            # Fallback: write a minimal worker
+            with open(os.path.join(build_dir, "worker.py"), "w") as f:
+                f.write("from fastapi import FastAPI\napp = FastAPI()\n@app.get('/health')\ndef health(): return {'status': 'ok'}\n")
+
         # Copy KB data into build context if available
         if kb_info:
             chroma_src = os.path.join(settings.CHROMA_PERSIST_DIR, kb_info["chroma_collection"])
@@ -262,14 +293,38 @@ async def execute_deploy(
         env_vars = {
             "KRONOS_AGENT_ID": agent.id,
             "KRONOS_AGENT_NAME": agent.name,
+            "KRONOS_AGENT_TYPE": payload["agent_type"],
             "KRONOS_MODEL": payload["model"],
             "OLLAMA_BASE_URL": settings.OLLAMA_BASE_URL,
+            "SYSTEM_PROMPT": (agent.system_prompt or "")[:2000],
+            "EMBED_MODEL": settings.EMBED_MODEL,
             **(payload.get("env_vars") or {}),
         }
 
         port_bindings = {}
         if payload.get("port"):
             port_bindings = {"8080/tcp": payload["port"]}
+
+        # Resolve memory / CPU limits:
+        # 1. Agent-specific override (set at create time)
+        # 2. System default from Settings table
+        # 3. Hardcoded safe fallback
+        from routers.settings_router import get_setting as _get_setting
+        default_mem = await _get_setting("agents.default_mem_limit_mb", db) or 512
+        default_cpu = await _get_setting("agents.default_cpu_shares", db) or 512
+
+        mem_mb  = agent.mem_limit_mb  if agent.mem_limit_mb  is not None else int(default_mem)
+        cpu_shr = agent.cpu_shares    if agent.cpu_shares     is not None else int(default_cpu)
+
+        # Docker SDK uses bytes for memory; 0 means no limit
+        mem_bytes = mem_mb * 1024 * 1024 if mem_mb > 0 else 0
+        # mem_reservation = soft limit (what's "reserved"), mem_limit = hard ceiling
+        # We set reservation = 50% of limit so scheduler knows what to expect
+        mem_reservation = (mem_bytes // 2) if mem_bytes > 0 else 0
+
+        logger.info(
+            f"Deploying {container_name}: mem={mem_mb}MB cpu_shares={cpu_shr}"
+        )
 
         container = dclient.containers.run(
             image_tag,
@@ -282,8 +337,17 @@ async def execute_deploy(
                 "kronos.agent_id": agent.id,
                 "kronos.agent_type": payload["agent_type"],
                 "kronos.managed": "true",
+                "kronos.mem_limit_mb": str(mem_mb),
             },
             restart_policy={"Name": "unless-stopped"},
+            # Memory: hard ceiling (OOM killer fires above this)
+            mem_limit=mem_bytes if mem_bytes > 0 else None,
+            # Memory reservation: soft target for scheduling hints
+            mem_reservation=mem_reservation if mem_reservation > 0 else None,
+            # Swap: no swap beyond the memory limit (prevents disk thrashing)
+            memswap_limit=mem_bytes if mem_bytes > 0 else None,
+            # CPU: relative weight (not a hard cap, only active under contention)
+            cpu_shares=cpu_shr,
         )
 
         shutil.rmtree(build_dir, ignore_errors=True)
@@ -367,19 +431,29 @@ async def agent_logs(
 def _build_worker_dockerfile(model: str, kb_info: Optional[dict], system_prompt: str) -> str:
     """Generate a Dockerfile for a KRONOS worker with baked KB."""
     copy_kb = ""
+    kb_collection = ""
     if kb_info:
         copy_kb = f"COPY chroma_kb/ /root/.chroma/{kb_info['chroma_collection']}/"
+        kb_collection = kb_info['chroma_collection']
 
     return f"""FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir fastapi uvicorn httpx chromadb
+# Install dependencies
+RUN pip install --no-cache-dir \
+    fastapi>=0.111.0 \
+    uvicorn[standard]>=0.30.0 \
+    httpx>=0.27.0 \
+    chromadb>=1.0.0 \
+    pydantic>=2.7.0
 
+# Bake KB into image
 {copy_kb}
 
+# Runtime config (overridable at container launch)
 ENV KRONOS_MODEL={model}
-ENV CHROMA_COLLECTION={kb_info['chroma_collection'] if kb_info else ''}
+ENV CHROMA_COLLECTION={kb_collection}
 
 COPY worker.py .
 

@@ -283,6 +283,82 @@ passes GPU access through automatically on modern versions.`,
       },
     ],
   },
+  {
+    section: 'Pentest KB Builder',
+    color: 'var(--red)',
+    entries: [
+      {
+        title: 'RAG vs Fine-tuning for Pentesting',
+        body: `RAG is NOT the same as training or fine-tuning. Here's the difference:
+
+FINE-TUNING:
+— Changes the model's internal weights
+— Expensive (GPU time, hours to days)
+— Knowledge becomes "baked in" but can't be updated without re-training
+— Model may "hallucinate" about new CVEs it wasn't trained on
+
+RAG (what KRONOS does):
+— Model weights never change
+— You feed it a searchable library of tool docs, techniques, payloads
+— At question time, relevant chunks are retrieved and given as context
+— Update the KB by adding documents — no retraining needed
+— Model cites exactly where it got the answer from
+
+For pentesting, RAG is actually BETTER than fine-tuning because:
+— New CVEs and tool updates can be added to the KB immediately
+— You can have separate KBs per engagement (network, web, wireless)
+— You can verify which source the model used
+— No expensive GPU required`,
+      },
+      {
+        title: 'What gets ingested in Pentest KB',
+        body: `The Pentest KB Builder ingests these knowledge sources:
+
+TOOLS (built-in, always accurate):
+— nmap: all scan types, OS detection, NSE scripts, timing, evasion
+— metasploit: modules, payloads, meterpreter, post-exploitation
+— sqlmap: injection techniques, tamper scripts, enumeration
+— gobuster/ffuf: directory/file brute force, vhost fuzzing
+— hydra: online brute force for SSH, FTP, HTTP, SMB, RDP
+— john/hashcat: offline password cracking, hash formats, masks
+— nikto: web server scanning, tuning options, evasion
+— burpsuite: proxy, intruder, repeater, scanner, extensions
+— wireshark/tshark: capture/display filters, credential extraction
+
+EXTRAS:
+— OWASP Top 10: A01-A10 with attack vectors and test cases
+— Pentest Methodology: PTES 6 phases with tool commands
+— Common Payloads: XSS, SQLi, SSRF, XXE, CMDi, path traversal
+— Report Templates: CVSS scoring, finding format, severity matrix`,
+      },
+      {
+        title: 'Example questions after building Pentest KB',
+        body: `Once the KB is built and a pentest agent is deployed, you can ask:
+
+TOOL USAGE:
+— "What nmap flags perform a stealth SYN scan without ping?"
+— "How do I run gobuster against a PHP site with extensions?"
+— "What sqlmap tamper scripts bypass basic WAF filtering?"
+— "How do I crack a bcrypt hash with hashcat?"
+
+TECHNIQUE:
+— "How do I exploit MS17-010 EternalBlue with Metasploit?"
+— "What are common SSRF bypass techniques for 127.0.0.1?"
+— "How do I enumerate SMB shares without credentials?"
+— "What JWT attack works when alg is RS256?"
+
+REPORT WRITING:
+— "Generate a High severity finding report for reflected XSS"
+— "Write a CVSS vector for unauthenticated RCE over network"
+— "What's the remediation for SQL injection in a login form?"
+
+METHODOLOGY:
+— "What should I do after getting a low-priv shell on Linux?"
+— "Walk me through a web app pentest methodology"
+— "What Google dorks find exposed admin panels?"`,
+      },
+    ],
+  },
 ]
 
 function WikiEntry({ entry }) {

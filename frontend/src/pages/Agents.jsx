@@ -39,8 +39,19 @@ function AgentRow({ agent, onEdit, onDelete, onDeploy, onStop, onLogs }) {
           <Badge color={TYPE_COLOR[agent.agent_type] || 'default'}>{agent.agent_type.replace('_', ' ')}</Badge>
           <Badge color={STATUS_COLOR[agent.status] || 'default'}>{agent.status}</Badge>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
-          {agent.model} {agent.container_name && `· ${agent.container_name}`}
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'var(--font-mono)', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span>{agent.model}</span>
+          {agent.container_name && <span style={{ color: 'var(--text-muted)' }}>· {agent.container_name}</span>}
+          {agent.mem_limit_mb > 0 && (
+            <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--bg-overlay)', borderRadius: 3, border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+              🧠 {agent.mem_limit_mb >= 1024 ? `${agent.mem_limit_mb/1024}GB` : `${agent.mem_limit_mb}MB`}
+            </span>
+          )}
+          {agent.cpu_shares && agent.cpu_shares !== 512 && (
+            <span style={{ fontSize: 10, padding: '1px 6px', background: 'var(--bg-overlay)', borderRadius: 3, border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+              ⚡ {agent.cpu_shares >= 1024 ? 'High CPU' : agent.cpu_shares <= 256 ? 'Low CPU' : 'Normal CPU'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -69,7 +80,7 @@ export default function AgentsPage() {
   const [createModal, setCreateModal] = useState(false)
   const [editModal, setEditModal] = useState({ open: false, agent: null })
   const [logsModal, setLogsModal] = useState({ open: false, agent: null, logs: '' })
-  const [form, setForm] = useState({ name: '', description: '', agent_type: 'custom', model: '', kb_collection_id: '', system_prompt: '' })
+  const [form, setForm] = useState({ name: '', description: '', agent_type: 'custom', model: '', kb_collection_id: '', system_prompt: '', mem_limit_mb: 512, cpu_shares: 512 })
   const [saving, setSaving] = useState(false)
   const [seeding, setSeeding] = useState(false)
 
@@ -109,10 +120,10 @@ export default function AgentsPage() {
     if (!form.name || !form.model) return toast.error('Name and model are required')
     setSaving(true)
     try {
-      await createAgent({ ...form, kb_collection_id: form.kb_collection_id || undefined })
+      await createAgent({ ...form, kb_collection_id: form.kb_collection_id || undefined, mem_limit_mb: form.mem_limit_mb || 512, cpu_shares: form.cpu_shares || 512 })
       toast.success('Agent created')
       setCreateModal(false)
-      setForm({ name: '', description: '', agent_type: 'custom', model: '', kb_collection_id: '', system_prompt: '' })
+      setForm({ name: '', description: '', agent_type: 'custom', model: '', kb_collection_id: '', system_prompt: '', mem_limit_mb: 512, cpu_shares: 512 })
       refresh()
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Create failed')
@@ -125,6 +136,8 @@ export default function AgentsPage() {
       await updateAgent(editModal.agent.id, {
         description: editModal.agent.description,
         system_prompt: editModal.agent.system_prompt,
+        mem_limit_mb: editModal.agent.mem_limit_mb,
+        cpu_shares: editModal.agent.cpu_shares,
       })
       toast.success('Agent updated')
       setEditModal({ open: false, agent: null })
@@ -259,6 +272,41 @@ export default function AgentsPage() {
             {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
           <Textarea label="System Prompt" value={form.system_prompt} onChange={e => setForm({ ...form, system_prompt: e.target.value })} style={{ minHeight: 100 }} />
+
+          {/* Resource limits */}
+          <div style={{ padding: '10px 12px', background: 'var(--bg-raised)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              Resource Limits
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Memory Limit (MB)</div>
+                <select value={form.mem_limit_mb} onChange={e => setForm({ ...form, mem_limit_mb: parseInt(e.target.value) })}
+                  style={{ padding: '6px 8px', borderRadius: 'var(--radius)', border: '1px solid var(--border-mid)', background: 'var(--bg-base)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', width: '100%' }}>
+                  <option value={0}>No limit ⚠️</option>
+                  <option value={256}>256 MB — tiny models</option>
+                  <option value={512}>512 MB — default</option>
+                  <option value={1024}>1 GB — medium models</option>
+                  <option value={2048}>2 GB — large models</option>
+                  <option value={4096}>4 GB — heavy workloads</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>CPU Priority</div>
+                <select value={form.cpu_shares} onChange={e => setForm({ ...form, cpu_shares: parseInt(e.target.value) })}
+                  style={{ padding: '6px 8px', borderRadius: 'var(--radius)', border: '1px solid var(--border-mid)', background: 'var(--bg-base)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', width: '100%' }}>
+                  <option value={256}>Low (background)</option>
+                  <option value={512}>Normal (default)</option>
+                  <option value={1024}>High (1 CPU weight)</option>
+                  <option value={2048}>Very High</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
+              Default: 512 MB / Normal priority. Can be changed in Settings → Compute.
+            </div>
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <Btn variant="ghost" onClick={() => setCreateModal(false)}>cancel</Btn>
             <Btn variant="accent" onClick={handleCreate} loading={saving}>Create Agent</Btn>
@@ -275,6 +323,32 @@ export default function AgentsPage() {
             <Textarea label="System Prompt" value={editModal.agent.system_prompt || ''}
               onChange={e => setEditModal(s => ({ ...s, agent: { ...s.agent, system_prompt: e.target.value } }))}
               style={{ minHeight: 140 }} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Memory Limit (MB)</div>
+                <select value={editModal.agent.mem_limit_mb ?? 512}
+                  onChange={e => setEditModal(s => ({ ...s, agent: { ...s.agent, mem_limit_mb: parseInt(e.target.value) } }))}
+                  style={{ padding: '6px 8px', borderRadius: 'var(--radius)', border: '1px solid var(--border-mid)', background: 'var(--bg-raised)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', width: '100%' }}>
+                  <option value={0}>No limit ⚠️</option>
+                  <option value={256}>256 MB</option>
+                  <option value={512}>512 MB</option>
+                  <option value={1024}>1 GB</option>
+                  <option value={2048}>2 GB</option>
+                  <option value={4096}>4 GB</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>CPU Priority</div>
+                <select value={editModal.agent.cpu_shares ?? 512}
+                  onChange={e => setEditModal(s => ({ ...s, agent: { ...s.agent, cpu_shares: parseInt(e.target.value) } }))}
+                  style={{ padding: '6px 8px', borderRadius: 'var(--radius)', border: '1px solid var(--border-mid)', background: 'var(--bg-raised)', color: 'var(--text-primary)', fontSize: 12, fontFamily: 'var(--font-mono)', width: '100%' }}>
+                  <option value={256}>Low</option>
+                  <option value={512}>Normal</option>
+                  <option value={1024}>High</option>
+                  <option value={2048}>Very High</option>
+                </select>
+              </div>
+            </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <Btn variant="ghost" onClick={() => setEditModal({ open: false })}>cancel</Btn>
               <Btn variant="accent" onClick={handleEditSave} loading={saving}>Save</Btn>

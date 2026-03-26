@@ -127,6 +127,20 @@ export default function OllamaPage() {
         <StatBox label="Models Pulled" value={models.length} />
       </div>
 
+      {/* Offline hint */}
+      {status && !status.api_reachable && (
+        <div style={{
+          padding: '10px 14px', marginBottom: 16,
+          background: 'rgba(242,107,107,0.08)', border: '1px solid rgba(242,107,107,0.25)',
+          borderRadius: 'var(--radius-lg)', fontSize: 11, color: 'var(--red)',
+        }}>
+          <strong>Ollama not reachable at {status.ollama_url || 'host.docker.internal:11434'}</strong>
+          <div style={{ marginTop: 4, color: 'var(--text-secondary)' }}>
+            Make sure Ollama is running on your host machine: open a terminal and run <code style={{ color: 'var(--amber)' }}>ollama serve</code>
+          </div>
+        </div>
+      )}
+
       {/* Pull model */}
       <Card style={{ marginBottom: 20 }}>
         <CardHeader>Pull New Model</CardHeader>

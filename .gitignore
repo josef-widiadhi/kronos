@@ -2,7 +2,6 @@
 docker/.env
 backend/.env
 .env
-secrets.env
 
 # Python
 __pycache__/

@@ -62,12 +62,17 @@ export const queryKB = (collectionId, query, topK = 5) =>
   api.post('/rag/query', { collection_id: collectionId, query, top_k: topK })
 
 // ── Docker ────────────────────────────────────────────────────────────────────
-export const getContainers   = () => api.get('/docker/containers')
-export const containerStats  = id => api.get(`/docker/containers/${id}/stats`)
-export const requestInjectKB = (containerId, kbId, targetPath) =>
-  api.post('/docker/inject-kb', { container_id: containerId, kb_collection_id: kbId, target_path: targetPath })
-export const executeInjectKB = id => api.post(`/docker/inject-kb/execute/${id}`)
-export const requestExec     = (containerId, command) =>
+export const getContainers        = () => api.get('/docker/containers')
+export const containerStats       = id => api.get(`/docker/containers/${id}/stats`)
+export const containerOllamaCheck = id => api.get(`/docker/containers/${id}/ollama-check`)
+export const requestPushModel = (targetContainerId, modelName, port) =>
+  api.post('/docker/push-model', { target_container_id: targetContainerId, model_name: modelName, target_ollama_port: port })
+export const executePushModel     = id => api.post(`/docker/push-model/execute/${id}`)
+export const requestInjectKB      = (containerId, kbId, targetPath) =>
+  api.post('/docker/inject-kb', { container_id: containerId, kb_collection_id: kbId, target_path: targetPath || '/root/.chroma' })
+export const executeInjectKB      = id => api.post(`/docker/inject-kb/execute/${id}`)
+export const exportInjectKB       = id => api.post(`/docker/inject-kb/export-and-inject/${id}`)
+export const requestExec          = (containerId, command) =>
   api.post('/docker/exec', { container_id: containerId, command })
 
 // ── Agents ────────────────────────────────────────────────────────────────────
